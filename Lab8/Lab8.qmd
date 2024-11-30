@@ -47,49 +47,55 @@ FROM
 where src like '12.%' or src like '13.%' or src like '14.%';"
 #vnutr_addrs <- dbGetQuery(con, query)
 
-res_query<- "WITH vnutr_addr AS (SELECT DISTINCT
-dst
-FROM
-'test'
-where dst like '12.%' or dst like '13.%' or dst like '14.%'
-
-UNION
-
-SELECT DISTINCT
-src
-FROM
-'test'
-where src like '12.%' or src like '13.%' or src like '14.%'
+res_query<- "WITH vnutr_addr AS (
+  SELECT DISTINCT
+  dst
+  FROM
+  'test'
+  where dst like '12.%' or dst like '13.%' or dst like '14.%'
+  
+  UNION
+  
+  SELECT DISTINCT
+  src
+  FROM
+  'test'
+  where src like '12.%' or src like '13.%' or src like '14.%'
 ) 
 
 SELECT src, SUM(bytes) FROM test
-WHERE src in (SELECT DISTINCT
-dst
-FROM
-'test'
-where dst like '12.%' or dst like '13.%' or dst like '14.%'
-
-UNION
-
-SELECT DISTINCT
-src
-FROM
-'test'
-where src like '12.%' or src like '13.%' or src like '14.%'
-)  and dst not in (SELECT DISTINCT
-dst
-FROM
-'test'
-where dst like '12.%' or dst like '13.%' or dst like '14.%'
-
-UNION
-
-SELECT DISTINCT
-src
-FROM
-'test'
-where src like '12.%' or src like '13.%' or src like '14.%'
-) 
+WHERE src in 
+  (
+    SELECT DISTINCT
+    dst
+    FROM
+    'test'
+    where dst like '12.%' or dst like '13.%' or dst like '14.%'
+    
+    UNION
+    
+    SELECT DISTINCT
+    src
+    FROM
+    'test'
+    where src like '12.%' or src like '13.%' or src like '14.%'
+  )  
+and dst not in 
+  (
+    SELECT DISTINCT
+    dst
+    FROM
+    'test'
+    where dst like '12.%' or dst like '13.%' or dst like '14.%'
+    
+    UNION
+    
+    SELECT DISTINCT
+    src
+    FROM
+    'test'
+    where src like '12.%' or src like '13.%' or src like '14.%'
+  ) 
 GROUP BY src
 ORDER BY SUM(bytes)
 LIMIT 1;"
@@ -107,3 +113,53 @@ You can add options to executable code like this
 ```
 
 The `echo: false` option disables the printing of code (only output is displayed).
+
+## Задание 3: Надите утечку данных 3
+Еще один нарушитель собирает содержимое электронной почты и отправляет в Интернет используя порт, который обычно используется для другого типа трафика. Атакующий пересылает большое количество информации используя этот порт, которое нехарактерно для других хостов, использующих этот номер порта. Определите IP этой системы. Известно, что ее IP адрес отличается от нарушителей из предыдущих задач.
+
+```{r}
+#echo: false
+query3="SELECT src, port, SUM(bytes) from test 
+WHERE src in
+  (
+    SELECT DISTINCT
+    dst
+    FROM
+    'test'
+    where dst like '12.%' or dst like '13.%' or dst like '14.%'
+    
+    UNION
+    
+    SELECT DISTINCT
+    src
+    FROM
+    'test'
+    where src like '12.%' or src like '13.%' or src like '14.%'
+  )  
+and dst not in 
+  (
+    SELECT DISTINCT
+    dst
+    FROM
+    'test'
+    where dst like '12.%' or dst like '13.%' or dst like '14.%'
+    
+    UNION
+    
+    SELECT DISTINCT
+    src
+    FROM
+    'test'
+    where src like '12.%' or src like '13.%' or src like '14.%'
+  ) 
+GROUP BY src, port 
+ORDER BY src, port
+LIMIT 10"
+dbGetQuery(con, query3)
+```
+```{r}
+#echo: false
+dbGetQuery(con, query3)
+```
+
+
