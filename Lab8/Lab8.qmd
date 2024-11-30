@@ -7,23 +7,103 @@ format:
 editor: visual
 ---
 
-## Quarto
+## Задание
 
-Quarto enables you to weave together content and executable code into a finished document. To learn more about Quarto see <https://quarto.org>.
-
-## Running Code
-
-When you click the **Render** button a document will be generated that includes both content and the output of embedded code. You can embed code like this:
+Используя язык программирования R, библиотеку duckdb и облачную IDE Rstudio Server, развернутую в Yandex Cloud, выполнить задания и составить отчет. Описание полей датасета: timestamp,src,dst,port,bytes IP адреса внутренней сети начинаются с 12-14 Все остальные IP адреса относятся к внешним узлам
 
 ```{r}
-1 + 1
+#echo: false
+library(DBI)
+library(duckdb)
+library(dplyr)
+library(utils)
+con <- dbConnect(duckdb::duckdb())
+query <- "CREATE TABLE test AS SELECT * FROM 'tm_data.parquet';"
+dbExecute(con,query)
+dbGetQuery(con, "SELECT * from test LIMIT 10")
+
+
 ```
+
+## Задание 1: Надите утечку данных из Вашей сети
+
+Важнейшие документы с результатами нашей исследовательской деятельности в области создания вакцин скачиваются в виде больших заархивированных дампов. Один из хостов в нашей сети используется для пересылки этой информации – он пересылает гораздо больше информации на внешние ресурсы в Интернете, чем остальные компьютеры нашей сети. Определите его IP-адрес.
+
+```{r}
+#echo: false
+#con <- dbConnect(duckdb::duckdb())
+query="SELECT DISTINCT
+*
+FROM
+'test'
+where dst like '12.%' or dst like '13.%' or dst like '14.%'
+
+UNION
+
+SELECT DISTINCT
+*
+FROM
+'test'
+where src like '12.%' or src like '13.%' or src like '14.%';"
+#vnutr_addrs <- dbGetQuery(con, query)
+
+res_query<- "WITH vnutr_addr AS (SELECT DISTINCT
+dst
+FROM
+'test'
+where dst like '12.%' or dst like '13.%' or dst like '14.%'
+
+UNION
+
+SELECT DISTINCT
+src
+FROM
+'test'
+where src like '12.%' or src like '13.%' or src like '14.%'
+) 
+
+SELECT src, SUM(bytes) FROM test
+WHERE src in (SELECT DISTINCT
+dst
+FROM
+'test'
+where dst like '12.%' or dst like '13.%' or dst like '14.%'
+
+UNION
+
+SELECT DISTINCT
+src
+FROM
+'test'
+where src like '12.%' or src like '13.%' or src like '14.%'
+)  and dst not in (SELECT DISTINCT
+dst
+FROM
+'test'
+where dst like '12.%' or dst like '13.%' or dst like '14.%'
+
+UNION
+
+SELECT DISTINCT
+src
+FROM
+'test'
+where src like '12.%' or src like '13.%' or src like '14.%'
+) 
+GROUP BY src
+ORDER BY SUM(bytes)
+LIMIT 1;"
+
+dbGetQuery(con, res_query)
+```
+
+
 
 You can add options to executable code like this
 
 ```{r}
-#| echo: false
-2 * 2
+#echo: false
+
 ```
 
 The `echo: false` option disables the printing of code (only output is displayed).
