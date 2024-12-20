@@ -4,3 +4,5 @@
 .Ruserdata
 *.pqt
 *.parquet
+Lab*/.gitignore
+Lab*/.Rproj
