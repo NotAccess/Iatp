@@ -5,4 +5,5 @@
 *.pqt
 *.parquet
 Lab*/.gitignore
-Lab*/.Rproj
+*.Rproj
+!latp.Rproj
