@@ -1,0 +1,177 @@
+---
+title: "Основы обработки данных с помощью R и Dplyr"
+author: "KDA"
+format: 
+  md:
+    output-file: README.md
+---
+
+## Цель
+
+1.  Развить практические навыки использования языка программирования R для обработки данных
+2.  Закрепить знания базовых типов данных языка R
+3.  Развить практические навыки использования функций обработки данных пакета `dplyr` – функции `select(), filter(), mutate(), arrange(), group_by()`
+
+## ️Исходные данные
+
+1.  R 4.4.1
+2.  RStudio 2024.04.2+764
+
+## ️Общий план выполнения
+
+Используя R и среду разработки RStudio IDE, выполнить задания.
+
+## Содержание ЛР
+
+### Шаг 1: Настройка nycflights13
+
+1.  **Установить программный пакет nycflights13 с помощью:**
+
+    -   интерфейса RStudio IDE
+
+        ![](images/clipboard-3585767208.png)
+
+2.  **Проверить наличие данных**
+
+```{r}
+library(nycflights13)
+library(dplyr)
+```
+
+### Шаг 2: Выполнение заданий
+
+1.  **Сколько встроенных в пакет nycflights13 датафреймов?**
+
+```{r}
+ls("package:nycflights13") %>% length()
+```
+
+2.  **Сколько строк в каждом датафрейме?**
+
+```{r}
+for (df in ls("package:nycflights13")) {
+      cat(df, "->", nrow(get(df)), "\n")
+    }
+```
+
+3.  **Сколько столбцов в каждом датафрейме?**
+
+```{r}
+for (df in ls("package:nycflights13")) {
+      cat(df, "->", ncol(get(df)), "\n")
+    }
+```
+
+4.  **Как просмотреть примерный вид датафрейма?**
+
+```{r}
+for (pack in ls("package:nycflights13")) {
+  cat(pack, "\n")
+  get(pack) %>% glimpse()
+  cat("___________\n")
+}
+```
+
+5.  **Сколько компаний-перевозчиков (carrier) учитывают эти наборы данных (представлено в наборах дан- ных)?**
+
+```{r}
+airlines %>%
+  select(carrier) %>%
+  unique() %>%
+  filter(!is.na(carrier)) %>%
+  nrow()
+```
+
+6.  **Сколько рейсов принял аэропорт John F Kennedy Intl в мае?**
+
+```{r}
+airports %>%
+  filter(!is.na(faa)) %>%
+  filter(name == "John F Kennedy Intl") %>%
+  left_join(flights, join_by(faa == origin)) %>%
+  filter(month == 5) %>%
+  nrow()
+```
+
+7.  **Какой самый северный аэропорт?**
+
+```{r}
+airports %>%
+  arrange(desc(lat)) %>%
+  head(1) %>%
+  select(name)
+```
+
+8.  **Какой аэропорт самый высокогорный (находится выше всех над уровнем моря)?**
+
+```{r}
+airports %>%
+  arrange(desc(alt)) %>%
+  head(1) %>%
+  select(name) %>%
+  knitr::kable()
+```
+
+9.  **Какие бортовые номера у самых старых самолетов?**
+
+```{r}
+planes %>% 
+  filter(year==(min(year, na.rm=TRUE))) %>%
+  select( tailnum)
+```
+
+10. **Какая средняя температура воздуха была в сентябре в аэропорту John F Kennedy Intl (в градусах Цельсия)**
+
+```{r}
+airports %>%
+  filter(!is.na(faa)) %>%
+  filter(name == "John F Kennedy Intl") %>%
+  left_join(weather, join_by(faa == origin)) %>%
+  filter(month == 9) %>%
+  mutate(temp_C = (5/9) * (temp - 32)) %>%
+  summarise(avg_temp_C = mean(temp_C, na.rm = TRUE))
+```
+
+11. **Самолеты какой авиакомпании совершили больше всего вылетов в июне?**
+
+```{r}
+airlines %>%
+  filter(carrier == (flights %>%
+                      filter(month == 6) %>%
+                      count(carrier) %>%
+                      arrange(desc(n)) %>%
+                      head(1) %>%
+                      select(carrier) %>% 
+                      c()
+                     )
+           ) %>%
+  select(name)
+```
+
+12. **Самолеты какой авиакомпании задерживались чаще других в 2013 году?**
+
+```{r}
+
+
+airlines %>%
+  filter(carrier == (flights %>%
+                      filter(arr_delay > 0) %>%
+                      count(carrier) %>%
+                      arrange(desc(n)) %>%
+                      head(1) %>%
+                      select(carrier) %>%
+                      c()  
+                     )
+         ) %>%
+  select(name)
+```
+
+## ️Оценка результата
+
+Развиты практические навыки использования функций обработки данных пакета dplyr – функции select(), filter(), mutate(), arrange(), group_by()
+
+## ️Вывод
+
+1.  Установлен пакет nycflights13
+2.  Выполнены задания
+3.  Составлен отчет
