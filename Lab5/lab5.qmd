@@ -1,0 +1,276 @@
+---
+title: "Исследование информации о состоянии беспроводных сетей"
+author: "KDA"
+format: 
+  md:
+    output-file: README.md
+---
+
+## Цель
+
+1. Получить знания о методах исследования радиоэлектронной обстановки.
+2.  Составить представление о механизмах работы Wi-Fi сетей на канальном и сетевом уровне модели OSI.
+3.  Зекрепить практические навыки использования языка программирования R для обработки данных
+4.  Закрепить знания основных функций обработки данных экосистемы `tidyverse` языка R
+
+## ️Исходные данные
+
+1.  R 4.4.1
+2.  RStudio 2024.04.2+764
+
+## ️Общий план выполнения
+
+Используя R и среду разработки RStudio IDE, выполнить задания.
+
+## Содержание ЛР
+
+### Шаг 1: Подготовка данных
+
+1. **Проверить наличие данных**
+
+
+```{r}
+library(dplyr)
+library(readr)
+library(tidyr)
+```
+
+2. **Первая часть данных**
+
+
+```{r}
+access_points <- read.csv(file="./data/P2_wifi_data.csv", nrows = 167)
+```
+
+3. **Вторая часть**
+
+
+```{r}
+clients <- read.csv(file="./data/P2_wifi_data.csv", skip=169)
+```
+
+4. **Приводим данные к "чистому" виду**
+
+
+```{r}
+access_points <- access_points %>%
+  mutate_at(vars(BSSID, Privacy, Cipher, Authentication, LAN.IP, ESSID),
+            trimws) %>%
+  mutate_at(vars(BSSID, Privacy, Cipher, Authentication, LAN.IP, ESSID),
+            na_if,
+            "")
+
+access_points$First.time.seen <-
+  as.POSIXct(access_points$First.time.seen, format = "%Y-%m-%d %H:%M:%S")
+access_points$Last.time.seen <-
+  as.POSIXct(access_points$Last.time.seen, format = "%Y-%m-%d %H:%M:%S")
+glimpse(access_points)
+```
+
+```{r}
+clients <- clients %>%
+  mutate_at(vars(Station.MAC, BSSID, Probed.ESSIDs), trimws) %>%
+  mutate_at(vars(Station.MAC, BSSID, Probed.ESSIDs), na_if, "")
+
+clients$First.time.seen <-
+  as.POSIXct(clients$First.time.seen, format = "%Y-%m-%d %H:%M:%S")
+clients$Last.time.seen <-
+  as.POSIXct(clients$Last.time.seen, format = "%Y-%m-%d %H:%M:%S")
+
+glimpse(clients)
+```
+
+### Шаг 2: Анализ
+
+#### Точки доступа
+
+1. **Определить небезопасные точки доступа (без шифрования – OPN)**
+
+```{r}
+access_points %>%
+  filter(Privacy == "OPN") %>%
+  select(BSSID) %>%
+  distinct(BSSID) %>%
+  knitr::kable()
+```
+
+2. **Определить производителя для каждого обнаруженного устройства**
+
+```         
+00:03:7A Taiyo Yuden Co., Ltd.
+00:03:7F Atheros Communications, Inc.
+00:25:00 Apple, Inc.
+00:26:99 Cisco Systems, Inc
+E0:D9:E3 Eltex Enterprise Ltd.
+E8:28:C1 Eltex Enterprise Ltd.
+```
+
+```{r}
+
+
+mac_lookup <- data.frame(
+  prefix = c(
+    "00:03:7A",
+    "00:03:7F",
+    "00:25:00",
+    "00:26:99",
+    "E0:D9:E3",
+    "E8:28:C1"
+  ),
+  manufacturer = c(
+    "Taiyo Yuden Co., Ltd.",
+    "Atheros Communications, Inc.",
+    "Apple, Inc.",
+    "Cisco Systems, Inc",
+    "Eltex Enterprise Ltd.",
+    "Eltex Enterprise Ltd."
+  )
+)
+
+result <- access_points %>%
+  mutate(mac_prefix = substr(BSSID, 1, 8)) %>%
+  left_join(mac_lookup, by = c("mac_prefix" = "prefix")) %>%
+  filter(Privacy == "OPN" & !is.na(manufacturer)) %>%
+  select(BSSID, manufacturer)
+
+
+print(result)
+
+
+```
+
+3. **Выявить устройства, использующие последнюю версию протокола шифрования WPA3, и названия точек доступа, реализованных на этих устройствах**
+
+```{r}
+access_points %>%
+  filter(grepl('WPA3', Privacy)) %>%
+  select(BSSID, ESSID) %>%
+  knitr::kable()
+```
+
+4. **Отсортировать точки доступа по интервалу времени, в течение которого они находились на связи, по убыванию.**
+
+```{r}
+access_points %>%
+  mutate(time_online = difftime(Last.time.seen, First.time.seen))%>%
+  arrange(desc(time_online)) %>%
+  select(BSSID, time_online) %>%
+  knitr::kable()
+```
+
+5. **Обнаружить топ-10 самых быстрых точек доступа**
+
+```{r}
+access_points %>% 
+  arrange(desc(Speed)) %>%
+  select(BSSID, Speed) %>% 
+  head(10) %>%
+  knitr::kable()
+```
+
+6. **Отсортировать точки доступа по частоте отправки запросов (beacons) в единицу времени по их убыванию**
+
+```{r}
+access_points %>%
+  mutate(Time = difftime(Last.time.seen, First.time.seen)) %>%
+  filter(Time != 0 & X..beacons != 0) %>%
+  mutate(BeacPs = X..beacons / as.integer(Time)) %>%
+  arrange(desc(BeacPs)) %>%
+  select(BSSID, X..beacons, Time, BeacPs) %>%
+  knitr::kable()
+```
+
+#### Данные клиентов
+
+1. **Определить производителя для каждого обнаруженного устройства**
+
+```{r}
+mac_lookup <- data.frame(
+  prefix = c(
+    "00:03:7F",
+    "00:0D:97",
+    "00:23:EB",
+    "00:25:00",
+    "00:26:99",
+    "08:3A:2F",
+    "0C:80:63",
+    "DC:09:4C",
+    "E0:D9:E3",
+    "E8:28:C1"
+  ),
+  manufacturer = c(
+    "Atheros Communications, Inc.",
+    "Hitachi Energy USA Inc.",
+    "Cisco Systems, Inc",
+    "Apple, Inc.",
+    "Cisco Systems, Inc",
+    "Guangzhou Juan Intelligent Tech Joint Stock Co.,Ltd",
+    "Tp-Link Technologies Co.,Ltd.",
+    "Huawei Technologies Co.,Ltd",
+    "Eltex Enterprise Ltd.",
+    "Eltex Enterprise Ltd."
+  )
+)
+
+result <- clients %>%
+  filter(BSSID != "(not associated)")%>%
+  filter(!is.na(BSSID)) %>%
+  arrange(BSSID) %>%
+  unique() %>%
+  mutate(mac_prefix = substr(BSSID, 1, 8)) %>%
+  left_join(mac_lookup, by = c("mac_prefix" = "prefix")) %>%
+  filter(!is.na(manufacturer)) %>%
+  select(BSSID, manufacturer) %>%
+  knitr::kable()
+
+result
+
+```
+
+2. **Обнаружить устройства, которые НЕ рандомизируют свой MAC адрес**
+
+```{r}
+clients  %>%
+  select(BSSID) %>%
+  filter(BSSID != "(not associated)" &
+           !grepl("^.[2|6|A|E].+", BSSID)) %>%
+  knitr::kable()
+
+```
+
+3. **Кластеризовать запросы от устройств к точкам доступа по их именам. Определить время появления устройства в зоне радиовидимости и время выхода его из нее**
+
+```{r}
+clients %>%
+  filter(!is.na(Probed.ESSIDs)) %>%
+  group_by(Probed.ESSIDs) %>%
+  summarise("min time" = min(First.time.seen),
+            "max time" = max(Last.time.seen),)
+
+```
+
+4. **Оценить стабильность уровня сигнала внури кластера во времени. Выявить наиболее стабильный кластер.**
+
+```{r}
+clients %>%
+  mutate(t = as.integer(difftime(Last.time.seen, First.time.seen))) %>%
+  filter(t != 0 &
+           !is.na(Probed.ESSIDs)) %>%
+  group_by(Probed.ESSIDs) %>%
+  summarise(Mean = mean(t), Sd = sd(t)) %>%
+  filter(!is.na(Sd) & 
+           Sd != 0) %>%
+  arrange(Sd, Mean) %>%
+  select(Probed.ESSIDs, Mean, Sd) %>%
+  head(1)
+```
+
+## ️Оценка результата
+
+Развиты практические навыки использования функций обработки данных пакета dplyr – функции select(), filter(), mutate(), arrange(), group_by()
+
+## ️Вывод
+
+1.  Загружен датасет
+2.  Выполнены задания
+3.  Составлен отчет

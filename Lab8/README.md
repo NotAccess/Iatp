@@ -1,37 +1,75 @@
-# QUARTO8
+# Основы обработки данных с помощью R и Dplyr
 KDA
 
-## Задание
+## Цель
 
-Используя язык программирования R, библиотеку duckdb и облачную IDE
-Rstudio Server, развернутую в Yandex Cloud, выполнить задания и
-составить отчет. Описание полей датасета: timestamp,src,dst,port,bytes
-IP адреса внутренней сети начинаются с 12-14 Все остальные IP адреса
-относятся к внешним узлам
+1.  Изучить возможности СУБД [DuckDB](https://duckdb.org//) для
+    обработки и анализ больших данных
+2.  Получить навыки применения DuckDB совместно с языком
+    программирования R
+3.  Получить навыки анализа `метаинфомации о сетевом трафике`
+4.  Получить навыки применения облачных технологий хранения, подготовки
+    и анализа данных: [Yandex Object
+    Storage](https://yandex.cloud/ru/docs/storage/), [Rstudio
+    Server](https://posit.co/products/open-source/rstudio-server/)
+
+## ️Исходные данные
+
+1.  R 4.4.1
+2.  RStudio 2024.04.2+764
+3.  Yandex Cloud
+
+## ️Общий план выполнения
+
+Используя R и среду разработки RStudio IDE, выполнить задания.
+
+## Содержание ЛР
+
+### Шаг 1: Настройка nycflights13
+
+1.  **Установить программный пакет duckdb с помощью:**
 
 ``` r
-#echo: false
-library(DBI)
 library(duckdb)
+```
+
+    Warning: пакет 'duckdb' был собран под R версии 4.4.2
+
+    Загрузка требуемого пакета: DBI
+
+    Warning: пакет 'DBI' был собран под R версии 4.4.2
+
+2.  **Загрузить остальные библиотеки**
+
+``` r
+library(DBI)
 library(dplyr)
 ```
 
+    Warning: пакет 'dplyr' был собран под R версии 4.4.2
 
-    Attaching package: 'dplyr'
 
-    The following objects are masked from 'package:stats':
+    Присоединяю пакет: 'dplyr'
+
+    Следующие объекты скрыты от 'package:stats':
 
         filter, lag
 
-    The following objects are masked from 'package:base':
+    Следующие объекты скрыты от 'package:base':
 
         intersect, setdiff, setequal, union
 
 ``` r
 library(utils)
+```
+
+3.  **Загрузим данные в СУБД**
+
+``` r
 con <- dbConnect(duckdb::duckdb())
-query <- "CREATE TABLE test AS SELECT * FROM 'tm_data.parquet';"
-dbExecute(con,query)
+path <- file.path("D:", "C practise", "datasets", "tm_data.pqt")
+
+dbExecute(con, paste0("CREATE TABLE test AS SELECT * FROM read_parquet('", path, "')"))
 ```
 
     [1] 105747730
@@ -52,14 +90,16 @@ dbGetQuery(con, "SELECT * from test LIMIT 10")
     9  1.578326e+12   12.43.98.93  18.85.31.68   79   979
     10 1.578326e+12  14.32.60.107 12.30.62.113   72  1036
 
-## Задание 1: Надите утечку данных из Вашей сети
+### Шаг 2: Выполнение заданий
+
+1.  **Надите утечку данных из Вашей сети**
 
 Важнейшие документы с результатами нашей исследовательской деятельности
 в области создания вакцин скачиваются в виде больших заархивированных
 дампов. Один из хостов в нашей сети используется для пересылки этой
 информации – он пересылает гораздо больше информации на внешние ресурсы
 в Интернете, чем остальные компьютеры нашей сети. Определите его
-IP-адрес.
+IP-адрес
 
 ``` r
 #echo: false
@@ -129,25 +169,69 @@ and dst not in
     where src like '12.%' or src like '13.%' or src like '14.%'
   ) 
 GROUP BY src
-ORDER BY SUM(bytes)
+ORDER BY SUM(bytes) DESC
 LIMIT 1;"
 
 dbGetQuery(con, res_query)
 ```
 
-              src sum(bytes)
-    1 14.42.60.94   10114942
+               src  sum(bytes)
+    1 13.37.84.125 10625497574
 
-You can add options to executable code like this
+2.  **Найдите утечку данных 2**
+
+Другой атакующий установил автоматическую задачу в системном
+планировщике cron для экспорта содержимого внутренней wiki системы. Эта
+система генерирует большое количество трафика в нерабочие часы, больше
+чем остальные хосты. Определите IP этой системы. Известно, что ее IP
+адрес отличается от нарушителя из предыдущей задачи.
 
 ``` r
-#echo: false
+query2 = "WITH traffic AS (
+    SELECT
+        extract(hour FROM epoch_ms(cast(timestamp as bigint))) AS hour,
+        src,
+        SUM(bytes) AS total_bytes
+    FROM
+        test
+    WHERE
+        SUBSTRING(src, 1, POSITION('.' IN src) - 1)::INT BETWEEN 12 AND 14
+        and src!='13.37.84.125'
+    GROUP BY
+        hour, src
+),
+max_traffic AS (
+    SELECT
+        hour,
+        src,
+        total_bytes,
+        RANK() OVER (PARTITION BY hour ORDER BY total_bytes DESC) AS rank
+    FROM
+        traffic
+)
+SELECT
+    src
+FROM
+    max_traffic
+WHERE
+    rank = 1
+    and hour in (
+      SELECT extract(hour FROM epoch_ms(cast(timestamp as bigint))) as hour FROM 'test'
+           WHERE (src LIKE '12.%' or src LIKE '13.%' or src LIKE '14.%') and
+           NOT (dst LIKE '12.%' or dst LIKE '13.%' or dst LIKE '14.%')
+           GROUP BY hour
+           ORDER BY STDDEV(bytes) DESC
+           LIMIT 1)
+
+
+"
+dbGetQuery(con, query2)
 ```
 
-The `echo: false` option disables the printing of code (only output is
-displayed).
+              src
+    1 12.55.77.96
 
-## Задание 3: Надите утечку данных 3
+3.  **Надите утечку данных 3**
 
 Еще один нарушитель собирает содержимое электронной почты и отправляет в
 Интернет используя порт, который обычно используется для другого типа
@@ -157,71 +241,61 @@ displayed).
 отличается от нарушителей из предыдущих задач.
 
 ``` r
-#echo: false
-query3="SELECT src, port, SUM(bytes) from test 
-WHERE src in
-  (
-    SELECT DISTINCT
-    dst
-    FROM
-    'test'
-    where dst like '12.%' or dst like '13.%' or dst like '14.%'
-    
-    UNION
-    
-    SELECT DISTINCT
-    src
-    FROM
-    'test'
-    where src like '12.%' or src like '13.%' or src like '14.%'
-  )  
-and dst not in 
-  (
-    SELECT DISTINCT
-    dst
-    FROM
-    'test'
-    where dst like '12.%' or dst like '13.%' or dst like '14.%'
-    
-    UNION
-    
-    SELECT DISTINCT
-    src
-    FROM
-    'test'
-    where src like '12.%' or src like '13.%' or src like '14.%'
-  ) 
-GROUP BY src, port 
-ORDER BY src, port
-LIMIT 10"
+query3="
+-- Шаг 1: Суммирование трафика по IP и порту
+WITH TrafficSummary AS (
+    SELECT 
+        src AS ip_address,
+        port,
+        SUM(bytes) AS total_bytes
+    FROM 
+        test
+     WHERE (src LIKE '12.%' or src LIKE '13.%' or src LIKE '14.%') and 
+           NOT (dst LIKE '12.%' or dst LIKE '13.%' or dst LIKE '14.%')
+    GROUP BY 
+        src, port
+),
+
+-- Шаг 2: Вычисление среднего трафика по порту
+AverageTraffic AS (
+    SELECT 
+        port,
+        AVG(total_bytes) AS avg_bytes
+    FROM 
+        TrafficSummary
+    GROUP BY 
+        port
+)
+
+-- Шаг 3: Определение отклонений
+SELECT 
+    ts.ip_address,
+    ts.port,
+    ts.total_bytes,
+    at.avg_bytes,
+    ABS(ts.total_bytes - at.avg_bytes) AS deviation
+FROM 
+    TrafficSummary ts
+JOIN 
+    AverageTraffic at ON ts.port = at.port
+WHERE 
+    ABS(ts.total_bytes - at.avg_bytes) > (2 * at.avg_bytes)
+ORDER BY 
+    ts.port, ts.ip_address;
+
+"
 dbGetQuery(con, query3)
 ```
 
-                src port sum(bytes)
-    1  12.30.105.68   22     694804
-    2  12.30.105.68   23     670325
-    3  12.30.105.68   25      14364
-    4  12.30.105.68   26     685806
-    5  12.30.105.68   27     684952
-    6  12.30.105.68   29   21971164
-    7  12.30.105.68   34     660261
-    8  12.30.105.68   37   21500048
-    9  12.30.105.68   39   21579679
-    10 12.30.105.68   40   21688674
+       ip_address port total_bytes avg_bytes deviation
+    1 12.30.96.87  124      356207  20599.12  335607.9
 
-``` r
-#echo: false
-dbGetQuery(con, query3)
-```
+## ️Оценка результата
 
-                src port sum(bytes)
-    1  12.30.105.68   22     694804
-    2  12.30.105.68   23     670325
-    3  12.30.105.68   25      14364
-    4  12.30.105.68   26     685806
-    5  12.30.105.68   27     684952
-    6  12.30.105.68   29   21971164
-    7  12.30.105.68   34     660261
-    8  12.30.105.68   37   21500048
-    9  12.30.105.68   39   21579679
-    10 12.30.105.68   40   21688674
+Провели анализ сетевого трафика с помощью библиотеки Duckdb
+
+## ️Вывод
+
+1.  Установлен пакет in-memory СУБД Duckdb
+2.  Выполнены задания
+3.  Составлен отчет
