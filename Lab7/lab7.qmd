@@ -8,9 +8,11 @@ format:
 
 ## Цель
 
-1.  Развить практические навыки использования языка программирования R для обработки данных
-2.  Закрепить знания базовых типов данных языка R
-3.  Развить практические навыки использования функций обработки данных пакета `dplyr` – функции `select(), filter(), mutate(), arrange(), group_by()`
+1. Изучить возможности технологии [Apache Arrow](https://arrow.apache.org/) для обработки и анализ больших данных
+2. Получить навыки применения Arrow совместно с языком программирования R
+3. Получить навыки анализа `метаинфомации о сетевом трафике`
+4. Получить навыки применения облачных технологий хранения, подготовки и анализа данных: [Yandex Object Storage](https://yandex.cloud/ru/docs/storage/), [Rstudio Server](https://posit.co/products/open-source/rstudio-server/).
+
 
 ## ️Исходные данные
 
@@ -65,78 +67,74 @@ net_data %>%
 Другой атакующий установил автоматическую задачу в системном планировщике cron для экспорта содержимого внутренней wiki системы. Эта система генерирует большое количество трафика в нерабочие часы, больше чем остальные хосты. Определите IP этой системы. Известно, что ее IP адрес отличается от нарушителя из предыдущей задачи.
 
 ```{r}
-net_data %>%
-  filter(!str_detect(src, "^13.37.84.125") &
-           (grepl("^1[2-4]\\..+", src) &
-              !grepl("^1[2-4]\\..+", dst))) %>%
-  mutate(timestamp = as.POSIXct(timestamp / 1000, origin = "1970-01-01", tz = "UTC")) %>%
-  mutate(hour = format(timestamp, "%H")) %>% 
-  
-  
-```
-```{r}
-library(lubridate)
-library(ggplot2)
-
-# Предположим, что ваш датасет называется net_data
-# net_data <- read.csv("path_to_your_data.csv") # Загрузка данных
-
-# Преобразование временной метки в формат POSIXct
+# Преобразование timestamp в час
 net_data <- net_data %>%
-  mutate(timestamp = as_datetime(timestamp/1000))
-
-# Извлечение часа из временной метки
-net_data <- net_data %>%
-  mutate(hour = hour(timestamp))
+  mutate(hour = hour(as_datetime(timestamp / 1000)))
 ```
 
 ```{r}
-# Группировка данных по часам и подсчет общего трафика
-hourly_traffic <- net_data %>%
-  group_by(hour, na.rm = TRUE) %>%
-  summarise(total_bytes = sum(bytes, na.rm = TRUE))
-#glimpse(hourly_traffic)
-# Визуализация распределения трафика по часам
-#ggplot(hourly_traffic, aes(x = hour, y = total_bytes)) +
-#  geom_line() +
-#  labs(title = "Распределение трафика по часам", x = "Час", y = "Общий трафик (байты)")
+traffic <- net_data %>%
+  filter(grepl("^1[2-4]\\..+", src) &
+           !grepl("^1[2-4]\\..+", dst) &
+           src != '13.37.84.125') %>%
+  group_by(hour, src) %>%
+  summarise(total_bytes = sum(bytes), .groups = 'drop')
 
-# Определение порога для нерабочих часов (например, ниже 10% от максимума)
-threshold <- max(hourly_traffic$total_bytes) * 0.1
+max_traffic <- traffic %>%
+  arrange(hour, desc(total_bytes)) %>%
+  group_by(hour) %>%
+  mutate(rank = row_number()) %>%
+  ungroup()
 
-# Определение нерабочих часов
-non_working_hours <- hourly_traffic %>%
-  filter(total_bytes < threshold) %>%
+hour_with_max_stddev <- net_data %>%
+  filter(grepl("^1[2-4]\\..+", src) &
+           !grepl("^1[2-4]\\..+", dst))%>%
+  group_by(hour) %>%
+  summarise(stddev_bytes = sd(bytes), .groups = 'drop') %>%
+  arrange(desc(stddev_bytes)) %>%
+  slice_head(n = 1) %>%
   pull(hour)
 
-non_working_hours %>%
+result <- max_traffic %>%
+  filter(rank == 1, hour %in% hour_with_max_stddev) %>%
+  select(src) %>%
   knitr::kable()
-# Фильтрация данных по нерабочим часам и группировка по IP-адресам
-result <- net_data %>%
-  filter(hour %in% non_working_hours) %>%
-  group_by(src) %>%
-  summarise(total_bytes = sum(bytes, na.rm = TRUE)) %>%
-  arrange(desc(total_bytes))
-
-# Получение IP-адреса с наибольшим количеством трафика
-top_ip <- result %>%
-  slice(1)
-
-print(top_ip)
-
+  
 ```
-
+```{r}
+result %>%
+  knitr::kable()
+```
 
 3.  **Надите утечку данных 3**
 
 Еще один нарушитель собирает содержимое электронной почты и отправляет в Интернет используя порт, который обычно используется для другого типа трафика. Атакующий пересылает большое количество информации используя этот порт, которое нехарактерно для других хостов, использующих этот номер порта. Определите IP этой системы. Известно, что ее IP адрес отличается от нарушителей из предыдущих задач.
 
 ```{r}
-for (df in ls("package:nycflights13")) {
-      cat(df, "->", ncol(get(df)), "\n")
-    }
-```
+# Шаг 1: Суммирование трафика по IP и порту
+TrafficSummary <- net_data %>%
+  filter(grepl("^1[2-4]\\..+", src) & !grepl("^1[2-4]\\..+", dst)) %>%
+  group_by(ip_address = src, port) %>%
+  summarise(total_bytes = sum(bytes), .groups = 'drop')
 
+# Шаг 2: Вычисление среднего трафика по порту
+AverageTraffic <- TrafficSummary %>%
+  group_by(port) %>%
+  summarise(avg_bytes = mean(total_bytes), .groups = 'drop')
+
+# Шаг 3: Определение отклонений
+result <- TrafficSummary %>%
+  inner_join(AverageTraffic, by = "port") %>%
+  mutate(deviation = abs(total_bytes - avg_bytes)) %>%
+  filter(deviation > (2 * avg_bytes)) %>%
+  arrange(port, ip_address)
+
+
+```
+```{r}
+result %>%
+  knitr::kable()
+```
 
 
 ## ️Оценка результата

@@ -1,5 +1,5 @@
-# Основы обработки данных с помощью R и Dplyr
-
+# Анализ данных сетевого трафика при помощи библиотеки Arrow
+KDA
 
 ## Цель
 
@@ -21,347 +21,239 @@
 
 ## Содержание ЛР
 
-### Шаг 1: Получение данных
+### Шаг 1: Настройка рабочего окружения
 
-1.  **Установка пакета nycflights13**
+1.  **Установить программный пакет arrow с помощью:**
 
-    ``` terminal
-    install.packages('nycflights13')
-    ```
+    -   интерфейса RStudio IDE
 
-2.  **Загрузка библиотек**
+2.  **Получим данные**
 
-    ``` r
-    library(dplyr)
-    ```
+``` r
+library(arrow) 
+```
 
-        Warning: пакет 'dplyr' был собран под R версии 4.4.2
+    Warning: пакет 'arrow' был собран под R версии 4.4.2
 
 
-        Присоединяю пакет: 'dplyr'
+    Присоединяю пакет: 'arrow'
 
-        Следующие объекты скрыты от 'package:stats':
+    Следующий объект скрыт от 'package:utils':
 
-            filter, lag
+        timestamp
 
-        Следующие объекты скрыты от 'package:base':
+``` r
+library(dplyr)
+```
 
-            intersect, setdiff, setequal, union
+    Warning: пакет 'dplyr' был собран под R версии 4.4.2
 
-    ``` r
-    library(nycflights13)
-    ```
 
-        Warning: пакет 'nycflights13' был собран под R версии 4.4.2
+    Присоединяю пакет: 'dplyr'
 
-3.  **Проверка полученных данных**
+    Следующие объекты скрыты от 'package:stats':
 
-    ``` r
-    knitr::kable(head(flights)[,1:5])
-    ```
+        filter, lag
 
-    <table>
-    <thead>
-    <tr class="header">
-    <th style="text-align: right;">year</th>
-    <th style="text-align: right;">month</th>
-    <th style="text-align: right;">day</th>
-    <th style="text-align: right;">dep_time</th>
-    <th style="text-align: right;">sched_dep_time</th>
-    </tr>
-    </thead>
-    <tbody>
-    <tr class="odd">
-    <td style="text-align: right;">2013</td>
-    <td style="text-align: right;">1</td>
-    <td style="text-align: right;">1</td>
-    <td style="text-align: right;">517</td>
-    <td style="text-align: right;">515</td>
-    </tr>
-    <tr class="even">
-    <td style="text-align: right;">2013</td>
-    <td style="text-align: right;">1</td>
-    <td style="text-align: right;">1</td>
-    <td style="text-align: right;">533</td>
-    <td style="text-align: right;">529</td>
-    </tr>
-    <tr class="odd">
-    <td style="text-align: right;">2013</td>
-    <td style="text-align: right;">1</td>
-    <td style="text-align: right;">1</td>
-    <td style="text-align: right;">542</td>
-    <td style="text-align: right;">540</td>
-    </tr>
-    <tr class="even">
-    <td style="text-align: right;">2013</td>
-    <td style="text-align: right;">1</td>
-    <td style="text-align: right;">1</td>
-    <td style="text-align: right;">544</td>
-    <td style="text-align: right;">545</td>
-    </tr>
-    <tr class="odd">
-    <td style="text-align: right;">2013</td>
-    <td style="text-align: right;">1</td>
-    <td style="text-align: right;">1</td>
-    <td style="text-align: right;">554</td>
-    <td style="text-align: right;">600</td>
-    </tr>
-    <tr class="even">
-    <td style="text-align: right;">2013</td>
-    <td style="text-align: right;">1</td>
-    <td style="text-align: right;">1</td>
-    <td style="text-align: right;">554</td>
-    <td style="text-align: right;">558</td>
-    </tr>
-    </tbody>
-    </table>
+    Следующие объекты скрыты от 'package:base':
 
-### Шаг 2: Ответы на вопросы
+        intersect, setdiff, setequal, union
 
-1.  **Сколько встроенных в пакет nycflights13 датафреймов?**
+``` r
+path <- file.path("D:", "C practise", "datasets", "tm_data.pqt")
+net_data <- read_parquet(path, as_data_frame = FALSE)
+```
 
-    ``` r
-    ls("package:nycflights13") %>% length()
-    ```
+### Шаг 2: Выполнение заданий
 
-        [1] 5
+1.  **Надите утечку данных из Вашей сети**
 
-2.  **Сколько строк в каждом датафрейме?**
+Важнейшие документы с результатами нашей исследовательской деятельности
+в области создания вакцин скачиваются в виде больших заархивированных
+дампов. Один из хостов в нашей сети используется для пересылки этой
+информации – он пересылает гораздо больше информации на внешние ресурсы
+в Интернете, чем остальные компьютеры нашей сети. Определите его
+IP-адрес
 
-    ``` r
-    for (df in ls("package:nycflights13")) {
-      cat(df, "->", nrow(get(df)), "\n")
-    }
-    ```
+``` r
+net_data %>% 
+  filter(grepl("^1[2-4]\\..+", src) & !grepl("^1[2-4]\\..+", dst)) %>%
+  group_by(src) %>%
+  summarise(traffic = sum(bytes)) %>%
+  arrange(desc(traffic)) %>%
+  head(1) %>%
+  select(src) %>%
+  knitr::kable()
+```
 
-        airlines -> 16 
-        airports -> 1458 
-        flights -> 336776 
-        planes -> 3322 
-        weather -> 26115 
+<table>
+<thead>
+<tr class="header">
+<th style="text-align: left;">src</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">13.37.84.125</td>
+</tr>
+</tbody>
+</table>
 
-3.  **Сколько столбцов в каждом датафрейме?**
+2.  **Найдите утечку данных 2**
 
-    ``` r
-    for (df in ls("package:nycflights13")) {
-      cat(df, "->", ncol(get(df)), "\n")
-    }
-    ```
+Другой атакующий установил автоматическую задачу в системном
+планировщике cron для экспорта содержимого внутренней wiki системы. Эта
+система генерирует большое количество трафика в нерабочие часы, больше
+чем остальные хосты. Определите IP этой системы. Известно, что ее IP
+адрес отличается от нарушителя из предыдущей задачи.
 
-        airlines -> 2 
-        airports -> 8 
-        flights -> 19 
-        planes -> 9 
-        weather -> 15 
+``` r
+# Преобразование timestamp в час
+net_data <- net_data %>%
+  mutate(hour = hour(as_datetime(timestamp / 1000)))
+```
 
-4.  **Как просмотреть примерный вид датафрейма?**
+``` r
+traffic <- net_data %>%
+  filter(grepl("^1[2-4]\\..+", src) &
+           !grepl("^1[2-4]\\..+", dst) &
+           src != '13.37.84.125') %>%
+  group_by(hour, src) %>%
+  summarise(total_bytes = sum(bytes), .groups = 'drop')
 
-    ``` r
-    airlines %>% glimpse()
-    ```
+max_traffic <- traffic %>%
+  arrange(hour, desc(total_bytes)) %>%
+  group_by(hour) %>%
+  mutate(rank = row_number()) %>%
+  ungroup()
+```
 
-        Rows: 16
-        Columns: 2
-        $ carrier <chr> "9E", "AA", "AS", "B6", "DL", "EV", "F9", "FL", "HA", "MQ", "O…
-        $ name    <chr> "Endeavor Air Inc.", "American Airlines Inc.", "Alaska Airline…
+    Warning: In row_number(): 
+    ℹ Expression not supported in Arrow
+    → Pulling data into R
 
-5.  **Сколько компаний-перевозчиков (carrier) учитывают эти наборы
-    данных (представлено в наборах данных)?**
+``` r
+hour_with_max_stddev <- net_data %>%
+  filter(grepl("^1[2-4]\\..+", src) &
+           !grepl("^1[2-4]\\..+", dst))%>%
+  group_by(hour) %>%
+  summarise(stddev_bytes = sd(bytes), .groups = 'drop') %>%
+  arrange(desc(stddev_bytes)) %>%
+  slice_head(n = 1) %>%
+  pull(hour)
+```
 
-    ``` r
-    airlines %>%
-      select(carrier) %>%
-      unique() %>%
-      filter(!is.na(carrier)) %>%
-      nrow()
-    ```
+    Warning: Default behavior of `pull()` on Arrow data is changing. Current behavior of returning an R vector is deprecated, and in a future release, it will return an Arrow `ChunkedArray`. To control this:
+    ℹ Specify `as_vector = TRUE` (the current default) or `FALSE` (what it will change to) in `pull()`
+    ℹ Or, set `options(arrow.pull_as_vector)` globally
+    This warning is displayed once every 8 hours.
 
-        [1] 16
+``` r
+result <- max_traffic %>%
+  filter(rank == 1, hour %in% hour_with_max_stddev) %>%
+  select(src) %>%
+  knitr::kable()
+```
 
-6.  **Сколько рейсов принял аэропорт John F Kennedy Intl в мае?**
+``` r
+result %>%
+  knitr::kable()
+```
 
-    ``` r
-    faa_JFKI <- airports %>%
-      filter(name == "John F Kennedy Intl") %>%
-      select(faa) %>%
-      c()
+<table>
+<thead>
+<tr class="header">
+<th style="text-align: left;">x</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">|src |</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">|:———–|</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">|12.55.77.96 |</td>
+</tr>
+</tbody>
+</table>
 
-    flights %>%
-      filter(month == 5 & origin == faa_JFKI) %>%
-      nrow()
-    ```
+3.  **Надите утечку данных 3**
 
-        [1] 9397
+Еще один нарушитель собирает содержимое электронной почты и отправляет в
+Интернет используя порт, который обычно используется для другого типа
+трафика. Атакующий пересылает большое количество информации используя
+этот порт, которое нехарактерно для других хостов, использующих этот
+номер порта. Определите IP этой системы. Известно, что ее IP адрес
+отличается от нарушителей из предыдущих задач.
 
-7.  **Какой самый северный аэропорт?**
+``` r
+# Шаг 1: Суммирование трафика по IP и порту
+TrafficSummary <- net_data %>%
+  filter(grepl("^1[2-4]\\..+", src) & !grepl("^1[2-4]\\..+", dst)) %>%
+  group_by(ip_address = src, port) %>%
+  summarise(total_bytes = sum(bytes), .groups = 'drop')
 
-    ``` r
-    airports %>%
-      arrange(desc(lat)) %>%
-      head(1) %>%
-      select(name) %>%
-      knitr::kable()
-    ```
+# Шаг 2: Вычисление среднего трафика по порту
+AverageTraffic <- TrafficSummary %>%
+  group_by(port) %>%
+  summarise(avg_bytes = mean(total_bytes), .groups = 'drop')
 
-    <table>
-    <thead>
-    <tr class="header">
-    <th style="text-align: left;">name</th>
-    </tr>
-    </thead>
-    <tbody>
-    <tr class="odd">
-    <td style="text-align: left;">Dillant Hopkins Airport</td>
-    </tr>
-    </tbody>
-    </table>
+# Шаг 3: Определение отклонений
+result <- TrafficSummary %>%
+  inner_join(AverageTraffic, by = "port") %>%
+  mutate(deviation = abs(total_bytes - avg_bytes)) %>%
+  filter(deviation > (2 * avg_bytes)) %>%
+  arrange(port, ip_address)
 
-8.  **Какой аэропорт самый высокогорный (находится выше всех над уровнем
-    моря)?**
+# Вывод результата
+print(result)
+```
 
-    ``` r
-    airports %>%
-      arrange(desc(alt)) %>%
-      head(1) %>%
-      select(name) %>%
-      knitr::kable()
-    ```
+    Table (query)
+    ip_address: string
+    port: int32
+    total_bytes: int64
+    avg_bytes: double
+    deviation: double (abs_checked(subtract_checked(total_bytes, avg_bytes)))
 
-    <table>
-    <thead>
-    <tr class="header">
-    <th style="text-align: left;">name</th>
-    </tr>
-    </thead>
-    <tbody>
-    <tr class="odd">
-    <td style="text-align: left;">Telluride</td>
-    </tr>
-    </tbody>
-    </table>
+    * Filter: (abs_checked(subtract_checked(total_bytes, avg_bytes)) > multiply_checked(2, avg_bytes))
+    * Sorted by port [asc], ip_address [asc]
+    See $.data for the source Arrow object
 
-9.  **Какие бортовые номера у самых старых самолетов?**
+``` r
+result %>%
+  knitr::kable()
+```
 
-    ``` r
-    planes %>%
-      arrange(year) %>%
-      head(1) %>%
-      select(tailnum) %>%
-      knitr::kable()
-    ```
-
-    <table>
-    <thead>
-    <tr class="header">
-    <th style="text-align: left;">tailnum</th>
-    </tr>
-    </thead>
-    <tbody>
-    <tr class="odd">
-    <td style="text-align: left;">N381AA</td>
-    </tr>
-    </tbody>
-    </table>
-
-10. **Какая средняя температура воздуха была в сентябре в аэропорту John
-    F Kennedy Intl (в градусах Цельсия)?**
-
-    ``` r
-    weather %>%
-      filter(month == 9 & origin == faa_JFKI) %>%
-      mutate(temp_C = (5/9) * (temp - 32)) %>%
-      summarise(avg_temp_C = mean(temp_C, na.rm = TRUE)) %>%
-      knitr::kable()
-    ```
-
-    <table>
-    <thead>
-    <tr class="header">
-    <th style="text-align: right;">avg_temp_C</th>
-    </tr>
-    </thead>
-    <tbody>
-    <tr class="odd">
-    <td style="text-align: right;">19.38764</td>
-    </tr>
-    </tbody>
-    </table>
-
-11. **Самолеты какой авиакомпании совершили больше всего вылетов в
-    июне?**
-
-    ``` r
-    carrier_June <- flights %>%
-      filter(month == 6) %>%
-      count(carrier) %>%
-      arrange(desc(n)) %>%
-      head(1) %>%
-      select(carrier) %>%
-      c()
-
-    airlines %>%
-      filter(carrier == carrier_June) %>%
-      select(name) %>%
-      knitr::kable()
-    ```
-
-    <table>
-    <thead>
-    <tr class="header">
-    <th style="text-align: left;">name</th>
-    </tr>
-    </thead>
-    <tbody>
-    <tr class="odd">
-    <td style="text-align: left;">United Air Lines Inc.</td>
-    </tr>
-    </tbody>
-    </table>
-
-12. **Самолеты какой авиакомпании задерживались чаще других в 2013
-    году?**
-
-    ``` r
-    carrier_delay <- flights %>%
-      filter(arr_delay > 0) %>%
-      count(carrier) %>%
-      arrange(desc(n)) %>%
-      head(1) %>%
-      select(carrier) %>%
-      c()
-
-    airlines %>%
-      filter(carrier == carrier_delay) %>%
-      select(name) %>%
-      knitr::kable()
-    ```
-
-    <table>
-    <thead>
-    <tr class="header">
-    <th style="text-align: left;">name</th>
-    </tr>
-    </thead>
-    <tbody>
-    <tr class="odd">
-    <td style="text-align: left;">ExpressJet Airlines Inc.</td>
-    </tr>
-    </tbody>
-    </table>
+<table>
+<thead>
+<tr class="header">
+<th style="text-align: left;">ip_address</th>
+<th style="text-align: right;">port</th>
+<th style="text-align: right;">total_bytes</th>
+<th style="text-align: right;">avg_bytes</th>
+<th style="text-align: right;">deviation</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">12.30.96.87</td>
+<td style="text-align: right;">124</td>
+<td style="text-align: right;">356207</td>
+<td style="text-align: right;">20599.12</td>
+<td style="text-align: right;">335607.9</td>
+</tr>
+</tbody>
+</table>
 
 ## ️Оценка результата
 
-Были использованы знания функций
-`select(), filter(), mutate(), arrange(), group_by()` для решения
-практических задач.
+Провели анализ сетевого трафика с помощью библиотеки arrow
 
 ## ️Вывод
 
-В результате выполнения работы были:
-
--   развиты практические навыки использования языка программирования R
-    для обработки данных
--   закреплены знания базовых типов данных языка R
--   развиты практические навыки использования функций обработки данных
-    пакета `dplyr` – функции
-    `select(), filter(), mutate(), arrange(), group_by()`
+1.  Установлен пакет arrow
+2.  Выполнены задания
+3.  Составлен отчет
